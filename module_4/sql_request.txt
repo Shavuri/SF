@@ -1,0 +1,49 @@
+
+SELECT f.flight_id,
+    f.flight_no,
+    f.scheduled_departure,
+    f.scheduled_arrival,
+    f.departure_airport,
+    f.arrival_airport,
+    f.status,
+    f.aircraft_code,
+    date_part('hour', f.scheduled_arrival - f.scheduled_departure) * 60 +
+    date_part('minute', f.scheduled_arrival - f.scheduled_departure) as duration, -- длительность полёта в минутах
+    es.seats_count economy_capacity, -- всего мест в экономе
+    bs.seats_count business_capacity, -- всего мест в бизнесе
+    ea.seats_sold economy_seats_sold, -- всего мест продано в экономе 
+    ba.seats_sold business_seats_sold, -- всего мест продано в бизнесе
+    ea.amount economy_amount, -- сумма денег эконом 
+    ba.amount business_amount -- сумма денег бизнеса
+
+FROM dst_project.flights f
+    JOIN (
+        SELECT s.aircraft_code code,
+               count(s.seat_no) seats_count
+        FROM dst_project.seats s
+        GROUP BY s.aircraft_code, s.fare_conditions
+        HAVING s.fare_conditions = 'Economy') es ON f.aircraft_code = es.code
+    JOIN (
+        SELECT s.aircraft_code code,
+               count(s.seat_no) seats_count
+        FROM dst_project.seats s
+        GROUP BY s.aircraft_code, s.fare_conditions
+        HAVING s.fare_conditions = 'Business') bs ON f.aircraft_code = bs.code
+    LEFT JOIN (
+        SELECT count(t.ticket_no) seats_sold,
+               sum(t.amount) amount,
+               t.flight_id
+        FROM dst_project.ticket_flights t
+        GROUP BY t.flight_id, t.fare_conditions
+        HAVING t.fare_conditions = 'Economy') ea ON f.flight_id = ea.flight_id
+    LEFT JOIN (
+        SELECT count(t.ticket_no) seats_sold,
+               sum(t.amount) amount,
+               t.flight_id
+        FROM dst_project.ticket_flights t
+        GROUP BY t.flight_id, t.fare_conditions
+        HAVING t.fare_conditions = 'Business') ba ON f.flight_id = ba.flight_id
+
+WHERE f.departure_airport = 'AAQ'
+  AND (date_trunc('month', f.scheduled_departure) IN ('2017-01-01','2017-02-01', '2017-12-01'))
+  AND f.status NOT IN ('Cancelled')
